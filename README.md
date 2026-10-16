@@ -1,139 +1,265 @@
-# AI Answer Sheet Evaluation Portal
+# AI-Based Answer Evaluator — beginner setup
 
-A practical, human-in-the-loop answer evaluation portal for educators. The current MVP supports question-paper parsing, student uploads, answer extraction, AI-assisted rubric evaluation, faculty overrides, final totals, and CSV results.
+This application helps teachers read scanned answer sheets, review the extracted text, obtain AI-suggested marks, and approve or change those marks. You do not need AI or programming experience to try the demo. AI can misread handwriting or award incorrect marks: always compare the scan and review the result.
 
-## Architecture
+Start here, then follow the [step-by-step feature demo](docs/DEMO_GUIDE.md). The [demo file catalogue](demo/README.md) explains which files go together. No database backup or shared login is required.
 
-- Frontend: Next.js App Router, TypeScript, Tailwind CSS.
-- Backend: FastAPI, Pydantic, SQLAlchemy, Alembic.
-- Database: PostgreSQL, using NUMERIC(10,2) / Python Decimal for marks.
-- Authentication: evaluator-only JWTs in HTTP-only cookies.
-- Storage: a local storage abstraction for answer sheets and question papers, configured by STORAGE_ROOT and replaceable with cloud storage later.
-- Deployment shape: a modular monolith; no microservices, Redis, Celery, or queue infrastructure.
+## 1. What you will run
 
-The backend follows route → service → repository → database. Business rules and ownership checks live in services; routes stay thin.
+| Part | What it does | Local address |
+|---|---|---|
+| Frontend | Website you use in the browser | http://localhost:3000 |
+| Backend | Handles uploads, saves data, calls AI | http://localhost:8000 |
+| PostgreSQL | Stores exams, students and marks | Port 5432, managed by Docker |
+| Ollama (optional) | Runs AI on your computer | http://localhost:11434 |
 
-## Prerequisites
+Choose **Ollama** for local AI without a key, or **OpenAI** for hosted AI with an API account and usage charges. You only need one AI provider. Both choices still need frontend, backend and PostgreSQL. Docker starts the database only.
 
-- Git
-- Docker Desktop
-- Python 3.11+
-- Node.js 20 LTS+ and npm
+## 2. Install prerequisites once
 
-## Setup
+| Software | Version / choice | Installation |
+|---|---|---|
+| Python | Supports 3.11+; use **3.12** for the demo, matching the tested backend environment | [Python downloads](https://www.python.org/downloads/). On Windows enable the launcher/Add to PATH option. Avoid an untested newer Python for this demo. |
+| Node.js and npm | Use **Node 22**; installed Next.js requires at least 20.9 | [Node 22 downloads](https://nodejs.org/en/download/archive/v22); npm is included. |
+| Git | Current Git installer | [Git downloads](https://git-scm.com/downloads) |
+| Docker Desktop | Install and open the application | [Docker Desktop](https://www.docker.com/products/docker-desktop/). Windows users: follow its [WSL 2 requirements](https://docs.docker.com/desktop/setup/install/windows-install/). |
+| Editor | VS Code recommended; PyCharm also works; neither is required | [VS Code](https://code.visualstudio.com/Download) or [PyCharm](https://www.jetbrains.com/pycharm/download/) |
+| Browser | Chrome, Edge, Firefox or Safari | Use an up-to-date browser. |
+| Ollama | Only for local AI | [Ollama download](https://ollama.com/download) |
 
-1. Copy the example environment file:
+The existing local vision setup is an Apple M4 Pro with 16 GB RAM using `gemma3:4b`. This is a tested setup, not a guaranteed minimum. CPU-only machines can be much slower. Allow several GB for the model plus Docker and dependencies. OpenAI avoids running a local model but sends document content to the API and incurs usage charges.
 
-       cp .env.example .env
+Open **Terminal → New Terminal** in VS Code, macOS Terminal, or Windows PowerShell. Reopen the terminal after installing software. Paste one command block at a time; do not paste prompts such as `$` or `%`.
 
-   Replace SECRET_KEY with a long random value. Never commit .env.
+```bash
+git --version
+node --version
+npm --version
+docker --version
+docker compose version
+```
 
-2. Start PostgreSQL:
+Check Python with `python3.12 --version` on macOS/Linux or `py -3.12 --version` on Windows. Linux users may also need their distribution's Python venv package.
 
-       docker compose up -d db
+## 3. Download and open the project
 
-3. Install backend dependencies and migrate:
+In a folder where you keep projects:
 
-       cd backend
-       python3 -m venv .venv
-       source .venv/bin/activate
-       pip install -r requirements.txt
-       alembic upgrade head
+```bash
+git clone https://github.com/madhukardwivedi/AI-Based-Answer-Evaluator.git
+cd AI-Based-Answer-Evaluator
+```
 
-4. Create the first evaluator account:
+Use **File → Open Folder** in VS Code and select this folder, or open it in PyCharm. In PyCharm select `backend/.venv` as the interpreter after step 7. No paid IDE features or AI editor extensions are necessary.
 
-       PYTHONPATH=. python ../scripts/create_evaluator.py
+The **project root** means the folder containing `README.md`, `backend`, `frontend`, and `docker-compose.yml`. Each new terminal below starts there unless stated otherwise.
 
-5. Start the API:
+## 4. Create private configuration
 
-       uvicorn app.main:app --reload --port 8000
+macOS/Linux:
 
-6. In another terminal, install and start the frontend:
+```bash
+cp .env.example .env
+python3.12 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
 
-       cd frontend
-       npm install
-       npm run dev
+Windows PowerShell:
 
-Open http://localhost:3000. API documentation is available at http://localhost:8000/docs.
+```powershell
+Copy-Item .env.example .env
+py -3.12 -c "import secrets; print(secrets.token_urlsafe(48))"
+```
 
-## Verification
+Open `.env` in your editor. Replace the value after `SECRET_KEY=` with the random value printed above. It secures login sessions; it is not an AI key. Keep the database defaults for the local demo. Save the file. Never share/commit `.env`, and do not copy over an existing configuration.
 
-Backend:
+The backend reads the root `.env`. Next.js reads frontend environment files separately. No extra frontend file is necessary at the default addresses. If you change the backend address, create `frontend/.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000` adjusted to the new address, then restart frontend. Never put an AI key in a `NEXT_PUBLIC_` variable.
 
-    cd backend
-    source .venv/bin/activate
-    pytest
+## 5. Choose an AI provider
 
-Frontend:
+### Option A — Ollama (local)
 
-    cd frontend
-    npm run lint
-    npm run typecheck
+Keep these lines in the root `.env`:
 
-## Available API
+```dotenv
+AI_PROVIDER=auto
+OPENAI_API_KEY=
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TEXT_MODEL=gemma3:4b
+OLLAMA_VISION_MODEL=gemma3:4b
+OLLAMA_MAPPING_MODEL=gemma3:4b
+OLLAMA_EVALUATION_MODEL=gemma3:4b
+OLLAMA_NUM_CTX=
+OLLAMA_TIMEOUT_SECONDS=180
+```
 
-- GET /health
-- POST /api/auth/login, POST /api/auth/logout, GET /api/auth/me
-- CRUD: /api/exams
-- CRUD: /api/exams/{exam_id}/questions, /api/questions/{question_id}
-- CRUD: /api/questions/{question_id}/rubric-criteria, /api/rubric-criteria/{criterion_id}
-- CRUD: /api/exams/{exam_id}/students, /api/students/{student_id}
-- POST /api/exams/{exam_id}/students/import (CSV/XLSX roster; `name` required, `roll_number` and `external_id` optional)
-- POST/GET: /api/exams/{exam_id}/answer-sheets
-- GET/DELETE/POST process: /api/answer-sheets/{answer_sheet_id}
-- GET/PUT/evaluate: /api/student-answers/{answer_id}
-- GET/PATCH/approve/reevaluate: /api/evaluations/{evaluation_id}
-- POST /api/student-submissions/{submission_id}/evaluate, /finalize, and /reset-evaluations
-- GET /api/student-submissions/{submission_id}/report (report-ready JSON)
-- GET /api/exams/{exam_id}/results, /results.csv, and /results.xlsx
-- POST/GET/DELETE: /api/exams/{exam_id}/question-paper
-- POST: /api/exams/{exam_id}/question-paper/parse and /import
+Open Ollama, then run:
 
-## Question-paper intelligence (Phase 3)
+```bash
+ollama --version
+ollama pull gemma3:4b
+ollama list
+```
 
-Set `AI_PROVIDER=auto` in the root `.env`. With a non-empty `OPENAI_API_KEY`, the backend selects OpenAI; without one, it selects Ollama. It never switches providers after a runtime error. `QUESTION_PARSER_MODEL` defaults to `gpt-4.1-mini`; `gemma3:4b` is the default and recommended local Ollama text, vision, mapping, and evaluation model for the current 16 GB development setup.
+Wait for the model download to finish. If Ollama is not already serving, run `ollama serve` in another terminal and leave it open. “Address already in use” usually means it is already running. Open http://localhost:11434/api/tags in your browser; it should list `gemma3:4b`.
 
-### Local Ollama setup
+Leave `OLLAMA_NUM_CTX` blank. Large explicit contexts previously stalled this project's 16 GB Mac. The app does not default to qwen. Local AI can take minutes; do not repeatedly click while a request is running.
 
-Install Ollama from [ollama.com](https://ollama.com), then run:
+### Option B — OpenAI API (hosted)
 
-    ollama --version
-    ollama pull gemma3:4b
-    ollama serve
+1. Sign in to the [OpenAI API platform](https://platform.openai.com/).
+2. Select/create an API project, arrange API billing/credits as required for your account, and check usage controls. A working ChatGPT login alone does not verify API quota.
+3. Create a key on the [API keys page](https://platform.openai.com/api-keys). Keep it private.
+4. In the **root `.env`**, set `AI_PROVIDER=auto`, paste your real key after `OPENAI_API_KEY=`, and keep `QUESTION_PARSER_MODEL=gpt-4.1-mini`.
+5. Save, stop the backend with **Ctrl+C**, and restart using step 8. No frontend changes are needed. Ollama is unnecessary for this option.
 
-In another terminal, verify the local service and model:
+Official setup: [OpenAI API quickstart](https://developers.openai.com/api/docs/quickstart). Monitor API usage during demos. Only send documents you are permitted to share with this provider.
 
-    curl http://localhost:11434/api/tags
-    ollama list
+**Model used by this project:** all OpenAI tasks share `QUESTION_PARSER_MODEL`, defaulting to `gpt-4.1-mini`. Despite the name, it is not limited to question-paper parsing. There are no separate OpenAI extraction/mapping/evaluation model variables.
 
-`gemma3:4b` is recommended locally for question-paper parsing, scanned-document understanding, mark extraction, answer mapping, and evaluation on the current 16 GB development machine. For digital PDFs the backend sends PyMuPDF-extracted text to `OLLAMA_TEXT_MODEL`; for scanned PDFs and image uploads it sends PyMuPDF/Pillow-rendered page images to `OLLAMA_VISION_MODEL`. Other installed Ollama models may be substituted through these environment variables, but the application does not fall back to `qwen3-vl:8b` by default.
+| AI task | OpenAI default | Ollama demo setting |
+|---|---|---|
+| Digital question-paper parsing | `gpt-4.1-mini` | `OLLAMA_TEXT_MODEL=gemma3:4b` |
+| Scanned question-paper parsing | `gpt-4.1-mini` | `OLLAMA_VISION_MODEL=gemma3:4b` |
+| Student-answer page transcription | `gpt-4.1-mini` | `OLLAMA_VISION_MODEL=gemma3:4b` |
+| Unresolved answer-to-question mapping | `gpt-4.1-mini` | `OLLAMA_MAPPING_MODEL=gemma3:4b` |
+| Suggested marks and feedback | `gpt-4.1-mini` | `OLLAMA_EVALUATION_MODEL=gemma3:4b` |
 
-Answer extraction first maps normalized labels such as `1`, `Q.1`, `Question 1`, `3a`, and `10b` to configured exam questions deterministically. Only segments without a unique label match are sent to the optional semantic mapper. Its local model and confidence threshold are configured with `OLLAMA_MAPPING_MODEL=gemma3:4b`, `AI_MAPPING_ENABLED=true`, and `AI_MAPPING_CONFIDENCE_THRESHOLD=0.80`; if `OLLAMA_MAPPING_MODEL` is left blank, the backend uses `OLLAMA_TEXT_MODEL`. Lower-confidence results remain available for manual mapping.
+`gpt-4.1-mini` supports image input and structured output used by the code: see the [official model page](https://developers.openai.com/api/docs/models/gpt-4.1-mini). This documents the existing default. Changing the shared setting affects every OpenAI task and needs compatibility testing.
 
-AI evaluation uses `OLLAMA_EVALUATION_MODEL=gemma3:4b` by default; if it is left blank, the backend uses `OLLAMA_TEXT_MODEL`. A question is evaluatable when it has a model answer, other reference data, or rubric criteria. Rubric questions are scored criterion-by-criterion and totaled in backend Decimal arithmetic; questions without a rubric use semantic comparison against the configured reference data. AI marks remain suggestions until faculty accepts or overrides them and explicitly finalizes the submission.
+With `AI_PROVIDER=auto`, a non-empty key selects OpenAI; an empty key selects Ollama. Invalid keys/timeouts do **not** trigger runtime fallback. To return to local AI, clear the key, keep `auto`, restart backend and start Ollama. Explicit `AI_PROVIDER=ollama` forces local AI. Shell environment variables override `.env`; remove stale exported values if settings appear ignored.
 
-Leave `OLLAMA_NUM_CTX=` blank for local development unless you have verified a specific value works on your machine. When blank, the application omits `num_ctx` entirely and lets Ollama use its stable default. Larger contexts substantially increase unified-memory use and may stall on 16 GB machines. `OLLAMA_TIMEOUT_SECONDS=180` remains the local request timeout.
+## 6. Start PostgreSQL
 
-For temporary local parser troubleshooting only, set `QUESTION_PARSER_DEBUG_OUTPUT=true`. The backend will print the raw model response when parsing fails. It can contain document text, so keep it `false` outside local debugging and turn it off after collecting the error.
+Open Docker Desktop and wait for its engine to run. From project root:
 
-## Repository Layout
+```bash
+docker compose up -d db
+docker compose ps
+```
 
-    frontend/    Next.js user interface
-    backend/     FastAPI application, migrations, and tests
-    storage/     ignored local storage placeholder for later phases
-    scripts/     administrative utilities
+Wait for `db` to be healthy. First startup downloads PostgreSQL 16. You do not need a separate PostgreSQL installation or manual table creation.
 
-## Evaluation demo flow
+## 7. Install backend and create your login
 
-1. Configure questions, maximum marks, and either model/reference data or rubric criteria. Optional reference fields include key concepts, acceptable alternatives, reference solution, and marking notes.
-2. Add a student and upload their PDF/JPG/PNG answer sheet.
-3. Select **Process / Extract**, then use **Extraction** to correct text or question mapping.
-4. Open **Evaluation**, evaluate one answer or all mapped answers, review criterion details, accept or override marks, and add faculty remarks.
-5. Explicitly finalize the student evaluation.
-6. Open **Results** for deterministic totals and download CSV or XLSX. The submission report endpoint provides data for a future PDF renderer.
+macOS/Linux:
 
-The current scope still excludes background workers, student-answer PDF splitting, student/parent logins, advanced analytics, and PDF reports.
+```bash
+cd backend
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+alembic upgrade head
+PYTHONPATH=. python ../scripts/create_evaluator.py
+```
 
-## Student roster import
+Windows PowerShell:
 
-The **Students** page retains manual entry and also accepts a CSV or XLSX roster. The first non-empty row is treated as headers; supported case-insensitive headers are `name`, `roll number`, `roll_number`, `roll no`, `external id`, and `external_id`. Download the CSV template from the page, or use [samples/student-roster-sample.csv](samples/student-roster-sample.csv). Imports trim fields, ignore blank rows, skip duplicate roll numbers or external IDs with row-level feedback, and commit valid rows together. `MAX_STUDENT_IMPORT_SIZE_BYTES` defaults to 2 MB.
+```powershell
+cd backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+alembic upgrade head
+$env:PYTHONPATH = "."
+python ..\scripts\create_evaluator.py
+```
+
+If PowerShell blocks activation, use a session-only policy and retry:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+`(.venv)` means your isolated Python environment is active. Alembic creates/updates tables; run it inside `backend`, not root. The account script asks for name, email and password (at least 8 characters). Password typing is hidden. Remember these credentials. There is no built-in shared login or public registration. Create your account once.
+
+## 8. Start backend — terminal 1
+
+In the same activated backend terminal:
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
+Leave it running. Expect `Application startup complete`. Check http://localhost:8000/health. Developer API documentation is at http://localhost:8000/docs; this is not the teacher-facing website.
+
+## 9. Start website — terminal 2
+
+Open a **new terminal in project root**:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Leave it running. Open **http://localhost:3000**, sign in with your new account, and follow [the demo guide](docs/DEMO_GUIDE.md). Use `localhost` consistently instead of mixing it with `127.0.0.1`, so cookies and browser requests agree.
+
+An empty dashboard is normal on a fresh installation. Sample files do not populate the database automatically; import/upload them through the guide.
+
+## 10. Stop, restart, update
+
+Stop frontend/backend with **Ctrl+C**. From root, `docker compose stop` stops PostgreSQL while retaining data. Keep both the database volume and uploaded files. Do not use `docker compose down -v` unless you intend to erase the database.
+
+Next day:
+
+1. Open Docker Desktop; from root run `docker compose up -d db`.
+2. Start Ollama if using local AI.
+3. Terminal 1: `cd backend`, activate the existing venv using step 7, then run `uvicorn app.main:app --reload --port 8000`.
+4. Terminal 2: `cd frontend`, then `npm run dev`.
+5. Open http://localhost:3000. Do not recreate the venv or evaluator account.
+
+To update: stop both servers, run `git pull` from root, run `python -m pip install -r requirements.txt` and `alembic upgrade head` in the activated backend environment, run `npm ci` in frontend, and restart. Resolve local Git changes before pulling.
+
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| Command not found / not recognized | Install the tool, reopen terminal, check its version. |
+| Docker daemon unavailable | Start Docker Desktop; on Windows complete its WSL 2/virtualization setup. |
+| Port 5432 occupied | Another PostgreSQL may be running. Stop the conflicting instance, or change Compose's host port and the matching `DATABASE_URL` port together. |
+| Migration/database error | Run `docker compose ps` from root; wait for healthy. Check root `.env`. Run Alembic inside `backend`. |
+| No module named app | Use backend working directory and the `PYTHONPATH` account-creation commands above. |
+| Login fails | Use the evaluator account, not a demo student. Check backend terminal and consistent localhost URLs. |
+| Website cannot reach API | Keep both servers running; check /health. Custom frontend API URLs belong in `frontend/.env.local`. |
+| Ollama unavailable/model missing | Start Ollama; run `ollama list`, then `ollama pull gemma3:4b` if absent. |
+| AI timeout | Close memory-heavy apps, leave context blank, try a small file. Do not force qwen on the tested 16 GB Mac. |
+| OpenAI fails | Check key, API billing/quota and model access. Restart backend after editing `.env`; never share the key in logs. |
+| Missing marks/duplicate import | Review candidates, enter visible marks, skip conflicts. Import does not overwrite existing questions. |
+| Evaluation needs reference data | Add model answers/rubrics in Questions using the supplied Maths reference guide. |
+| Wrong/missing transcription | Compare the scan and save a faithful transcription. Never repair the student's mathematics in their answer text. |
+| Finalize disabled | Every exam question needs a reviewed evaluation or a faculty-confirmed unanswered result. |
+
+## Verification for a technical helper
+
+In `backend`, with venv active:
+
+```bash
+pytest
+alembic current
+alembic heads
+```
+
+In `frontend`:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+AI tests use mocks; passing them does not guarantee accurate handwriting recognition. The extraction page has a known Next.js `<img>` lint warning. Windows setup and paid OpenAI requests need separate live verification on the recipient's machine.
+
+## Architecture and storage notes
+
+Next.js/TypeScript/Tailwind frontend; FastAPI/SQLAlchemy/Alembic backend; PostgreSQL with Decimal/NUMERIC marks; JWT in HTTP-only cookies; local storage. Modular monolith; no Redis/Celery/microservices.
+
+`STORAGE_ROOT=storage` resolves relative to the backend working directory with these launch commands, so new uploads normally go under `backend/storage/`. Use an absolute path for a different stable location. Changing it on an existing installation requires preserving its files. Uploads must stay out of Git.
+
+Question-paper parsing uses Ollama `/api/chat`; extraction/mapping/evaluation use `/api/generate`. Both validate structured output. The parser uses `OLLAMA_TIMEOUT_SECONDS`; the shared provider currently has a fixed 180-second timeout. Processing/re-evaluation is explicit, not triggered by page refresh.
+
+Directories: `backend/` (API/migrations/tests), `frontend/` (website), `scripts/` (account creation/parser diagnostics), `demo/` and `samples/` (synthetic demo materials), `docs/` (walkthrough/reference answers). Root sample PDFs keep their original paths for compatibility with the diagnostic script.
+
+CSV/XLSX exports are available. PDF reports, student login, automatic combined-PDF splitting, queues and production deployment are outside the current MVP. Dashboard evaluated/pending counts are incomplete; use Evaluation and Results for actual demo progress.

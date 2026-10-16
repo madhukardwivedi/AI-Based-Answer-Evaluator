@@ -13,6 +13,10 @@ backend/.coverage
 *.tsbuildinfo
 storage/*
 !storage/.gitkeep
+backend/storage/
+# Local demo exports are generated outputs, not shareable input fixtures.
+demo/*-results.csv
+demo/*-results.xlsx
 *.sqlite3
 *.db
 .DS_Store

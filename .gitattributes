@@ -1,0 +1,4 @@
+# Keep PDF byte offsets intact on Windows and avoid treating PDFs as text diffs.
+*.pdf binary
+# Store roster fixtures consistently while preserving CSV contents.
+*.csv text eol=lf
