@@ -128,6 +128,20 @@ Official setup: [OpenAI API quickstart](https://developers.openai.com/api/docs/q
 
 With `AI_PROVIDER=auto`, a non-empty key selects OpenAI; an empty key selects Ollama. Invalid keys/timeouts do **not** trigger runtime fallback. To return to local AI, clear the key, keep `auto`, restart backend and start Ollama. Explicit `AI_PROVIDER=ollama` forces local AI. Shell environment variables override `.env`; remove stale exported values if settings appear ignored.
 
+### Getting poor transcription? Try another model
+
+The default `gpt-4.1-mini` is a baseline, **not a validated guarantee of faithful handwritten Maths OCR**. Alternatives to compare are `gpt-4.1` and `gpt-5.4`; neither has been benchmarked on this project's sheets. A larger model may still omit steps or correct student mistakes.
+
+Open the **root `.env`**, find `QUESTION_PARSER_MODEL` (line **11** in a fresh copy of `.env.example`), and change only its value, for example:
+
+```dotenv
+QUESTION_PARSER_MODEL=gpt-4.1
+```
+
+Or trial `QUESTION_PARSER_MODEL=gpt-5.4`. Keep a valid OpenAI key and `AI_PROVIDER=auto`, save, and restart the backend. This changes **all OpenAI tasks**, not just parsing. Editing `.env.example` alone does not change your running application.
+
+Read [Model choices and exact switching instructions](docs/MODEL_GUIDE.md) before testing: it includes file/line locations, safe comparison steps, cached-result behavior, costs/access considerations, Ollama controls, and rollback instructions. API compatibility and transcription quality must be checked separately.
+
 ## 6. Start PostgreSQL
 
 Open Docker Desktop and wait for its engine to run. From project root:
